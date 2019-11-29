@@ -42,7 +42,7 @@ function main(filePaths, listDifferent) {
 
   /**
    * @type {Record<string, {
-   *   files: 'all' | import('ts-morph').SourceFile
+   *   files: import('ts-morph').SourceFile[]
    *   project: import('ts-morph').Project,
    *   detectNewLineKind: boolean,
    * }>}
@@ -55,7 +55,7 @@ function main(filePaths, listDifferent) {
   }
 
   for (const { files, project, detectNewLineKind } of Object.values(projects)) {
-    const sourceFiles = files === "all" ? project.getSourceFiles() : files;
+    const sourceFiles = files;
 
     let differentFiles = [],
       crLfWeight = 0;
