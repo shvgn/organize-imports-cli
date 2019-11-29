@@ -48,63 +48,21 @@ function main(filePaths, listDifferent) {
    * }>}
    */
   const projects = {};
-  let adHocProjectCounter = 0;
 
   for (const filePath of filePaths) {
     const tsConfigFilePath = tsconfig.findSync(path.dirname(filePath));
-    const projectEntry = tsConfigFilePath && projects[tsConfigFilePath];
 
-    if (projectEntry) {
-      const sourceFile = projectEntry.project.getSourceFile(filePath);
-
-      if (sourceFile) {
-        if (projectEntry.files !== "all") {
-          projectEntry.files.push(sourceFile);
-        }
-        continue;
-      }
+    const projectEntry = getProjectEntry(projects, tsConfigFilePath, filePath);
+    const sourceFile = projectEntry.project.getSourceFile(filePath);
+    if (sourceFile) {
+      projectEntry.files.push(sourceFile);
+      continue;
     }
 
-    const ec = editorconfig.parseSync(filePath);
-    const manipulationSettings = getManipulationSettings(ec);
-    const detectNewLineKind = !!ec.end_of_line;
-
-    if (tsConfigFilePath && !projectEntry) {
-      const project = new Project({ tsConfigFilePath, manipulationSettings });
-
-      projects[tsConfigFilePath] = {
-        files: [],
-        project,
-        detectNewLineKind
-      };
-
-      const sourceFile = project.getSourceFile(filePath);
-      
-      if (sourceFile) {
-        projects[tsConfigFilePath].files.push(sourceFile);
-        continue;
-      }
-    }
-
-    const ahKey = tsConfigFilePath
-      ? `adhoc:${tsConfigFilePath}`
-      : "\0" + adHocProjectCounter++;
-
-    if (!projects[ahKey]) {
-      const project = new Project({
-        manipulationSettings,
-        compilerOptions: { allowJs: true }
-      });
-
-      projects[ahKey] = {
-        files: [],
-        project,
-        detectNewLineKind
-      };
-    }
-
-    const ahProject = projects[ahKey].project;
-    projects[ahKey].files.push(ahProject.addExistingSourceFile(filePath));
+    const ahProjectEntry = getProjectEntry(projects, null, filePath);
+    const ahProject = ahProjectEntry.project;
+    const nonProjectFile = ahProject.addExistingSourceFile(filePath);
+    ahProjectEntry.files.push(nonProjectFile);
   }
 
   for (const { files, project, detectNewLineKind } of Object.values(projects)) {
@@ -164,6 +122,28 @@ function main(filePaths, listDifferent) {
   }
 
   logger.writeLine(chalk`{yellowBright Done!}`);
+}
+
+function getProjectEntry(projects, tsConfigFilePath, filePath) {
+  const key = tsConfigFilePath || 'adhoc';
+  if (!projects[key]) {
+    projects[key] = createProjectEntry(tsConfigFilePath, filePath);
+  }
+  return projects[key];
+}
+
+function createProjectEntry(tsConfigFilePath, filePath) {
+  const ec = editorconfig.parseSync(filePath);
+  const manipulationSettings = getManipulationSettings(ec);
+  const opts = tsConfigFilePath ? { tsConfigFilePath } : { allowJs: true };
+
+  const project = new Project({ ...opts, manipulationSettings });
+
+  return {
+    files: [],
+    project,
+    detectNewLineKind: !!ec.end_of_line
+  };
 }
 
 function getManipulationSettings(ec) {
