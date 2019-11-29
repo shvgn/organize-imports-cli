@@ -51,18 +51,7 @@ function main(filePaths, listDifferent) {
 
   for (const filePath of filePaths) {
     const tsConfigFilePath = tsconfig.findSync(path.dirname(filePath));
-
-    const projectEntry = getProjectEntry(projects, tsConfigFilePath, filePath);
-    const sourceFile = projectEntry.project.getSourceFile(filePath);
-    if (sourceFile) {
-      projectEntry.files.push(sourceFile);
-      continue;
-    }
-
-    const ahProjectEntry = getProjectEntry(projects, null, filePath);
-    const ahProject = ahProjectEntry.project;
-    const nonProjectFile = ahProject.addExistingSourceFile(filePath);
-    ahProjectEntry.files.push(nonProjectFile);
+    addFileToProject(projects, filePath, tsConfigFilePath);
   }
 
   for (const { files, project, detectNewLineKind } of Object.values(projects)) {
@@ -124,15 +113,40 @@ function main(filePaths, listDifferent) {
   logger.writeLine(chalk`{yellowBright Done!}`);
 }
 
-function getProjectEntry(projects, tsConfigFilePath, filePath) {
-  const key = tsConfigFilePath || 'adhoc';
+function addFileToProject(projects, filePath, tsConfigFilePath) {
+  const { project, files } = getProjectEntry(
+    projects,
+    filePath,
+    tsConfigFilePath
+  );
+
+  const sourceFile = tsConfigFilePath
+    ? project.getSourceFile(filePath)
+    : project.addExistingSourceFile(filePath);
+
+  if (sourceFile) {
+    files.push(sourceFile);
+    return;
+  }
+
+  if (!tsConfigFilePath) {
+    // already retried
+    return;
+  }
+
+  // try to add to fake project
+  addFileToProject(projects, filePath, null);
+}
+
+function getProjectEntry(projects, filePath, tsConfigFilePath) {
+  const key = tsConfigFilePath || "fake";
   if (!projects[key]) {
-    projects[key] = createProjectEntry(tsConfigFilePath, filePath);
+    projects[key] = createProjectEntry(filePath, tsConfigFilePath);
   }
   return projects[key];
 }
 
-function createProjectEntry(tsConfigFilePath, filePath) {
+function createProjectEntry(filePath, tsConfigFilePath) {
   const ec = editorconfig.parseSync(filePath);
   const manipulationSettings = getManipulationSettings(ec);
   const opts = tsConfigFilePath ? { tsConfigFilePath } : { allowJs: true };
