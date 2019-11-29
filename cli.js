@@ -42,71 +42,20 @@ function main(filePaths, listDifferent) {
 
   /**
    * @type {Record<string, {
-   *   files: 'all' | import('ts-morph').SourceFile
+   *   files: import('ts-morph').SourceFile[]
    *   project: import('ts-morph').Project,
    *   detectNewLineKind: boolean,
    * }>}
    */
   const projects = {};
-  let adHocProjectCounter = 0;
 
   for (const filePath of filePaths) {
     const tsConfigFilePath = tsconfig.findSync(path.dirname(filePath));
-    const projectEntry = tsConfigFilePath && projects[tsConfigFilePath];
-
-    if (projectEntry) {
-      const sourceFile = projectEntry.project.getSourceFile(filePath);
-
-      if (sourceFile) {
-        if (projectEntry.files !== "all") {
-          projectEntry.files.push(sourceFile);
-        }
-        continue;
-      }
-    }
-
-    const ec = editorconfig.parseSync(filePath);
-    const manipulationSettings = getManipulationSettings(ec);
-    const detectNewLineKind = !!ec.end_of_line;
-
-    if (tsConfigFilePath && !projectEntry) {
-      const project = new Project({ tsConfigFilePath, manipulationSettings });
-
-      if (path.basename(filePath).toLowerCase() === "tsconfig.json") {
-        projects[tsConfigFilePath] = {
-          files: "all",
-          project,
-          detectNewLineKind
-        };
-        continue;
-      }
-
-      const sourceFile = project.getSourceFile(filePath);
-
-      if (sourceFile) {
-        projects[tsConfigFilePath] = {
-          files: [sourceFile],
-          project,
-          detectNewLineKind
-        };
-        continue;
-      }
-    }
-
-    const adHocProject = new Project({
-      manipulationSettings,
-      compilerOptions: { allowJs: true }
-    });
-
-    projects["\0" + adHocProjectCounter++] = {
-      files: [adHocProject.addExistingSourceFile(filePath)],
-      project: adHocProject,
-      detectNewLineKind
-    };
+    addFileToProject(projects, filePath, tsConfigFilePath);
   }
 
   for (const { files, project, detectNewLineKind } of Object.values(projects)) {
-    const sourceFiles = files === "all" ? project.getSourceFiles() : files;
+    const sourceFiles = files;
 
     let differentFiles = [],
       crLfWeight = 0;
@@ -162,6 +111,53 @@ function main(filePaths, listDifferent) {
   }
 
   logger.writeLine(chalk`{yellowBright Done!}`);
+}
+
+function addFileToProject(projects, filePath, tsConfigFilePath) {
+  const { project, files } = getProjectEntry(
+    projects,
+    filePath,
+    tsConfigFilePath
+  );
+
+  const sourceFile = tsConfigFilePath
+    ? project.getSourceFile(filePath)
+    : project.addExistingSourceFile(filePath);
+
+  if (sourceFile) {
+    files.push(sourceFile);
+    return;
+  }
+
+  if (!tsConfigFilePath) {
+    // already retried
+    return;
+  }
+
+  // try to add to fake project
+  addFileToProject(projects, filePath, null);
+}
+
+function getProjectEntry(projects, filePath, tsConfigFilePath) {
+  const key = tsConfigFilePath || "fake";
+  if (!projects[key]) {
+    projects[key] = createProjectEntry(filePath, tsConfigFilePath);
+  }
+  return projects[key];
+}
+
+function createProjectEntry(filePath, tsConfigFilePath) {
+  const ec = editorconfig.parseSync(filePath);
+  const manipulationSettings = getManipulationSettings(ec);
+  const opts = tsConfigFilePath ? { tsConfigFilePath } : { allowJs: true };
+
+  const project = new Project({ ...opts, manipulationSettings });
+
+  return {
+    files: [],
+    project,
+    detectNewLineKind: !!ec.end_of_line
+  };
 }
 
 function getManipulationSettings(ec) {
