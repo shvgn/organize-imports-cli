@@ -93,16 +93,25 @@ function main(filePaths, listDifferent) {
       }
     }
 
-    const adHocProject = new Project({
-      manipulationSettings,
-      compilerOptions: { allowJs: true }
-    });
+    const ahKey = tsConfigFilePath
+      ? `adhoc:${tsConfigFilePath}`
+      : "\0" + adHocProjectCounter++;
 
-    projects["\0" + adHocProjectCounter++] = {
-      files: [adHocProject.addExistingSourceFile(filePath)],
-      project: adHocProject,
-      detectNewLineKind
-    };
+    if (!projects[ahKey]) {
+      const project = new Project({
+        manipulationSettings,
+        compilerOptions: { allowJs: true }
+      });
+
+      projects[ahKey] = {
+        files: [],
+        project,
+        detectNewLineKind
+      };
+    }
+
+    const ahProject = projects[ahKey].project;
+    projects[ahKey].files.push(ahProject.addExistingSourceFile(filePath));
   }
 
   for (const { files, project, detectNewLineKind } of Object.values(projects)) {
