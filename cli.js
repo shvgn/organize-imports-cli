@@ -72,23 +72,16 @@ function main(filePaths, listDifferent) {
     if (tsConfigFilePath && !projectEntry) {
       const project = new Project({ tsConfigFilePath, manipulationSettings });
 
-      if (path.basename(filePath).toLowerCase() === "tsconfig.json") {
-        projects[tsConfigFilePath] = {
-          files: "all",
-          project,
-          detectNewLineKind
-        };
-        continue;
-      }
+      projects[tsConfigFilePath] = {
+        files: [],
+        project,
+        detectNewLineKind
+      };
 
       const sourceFile = project.getSourceFile(filePath);
-
+      
       if (sourceFile) {
-        projects[tsConfigFilePath] = {
-          files: [sourceFile],
-          project,
-          detectNewLineKind
-        };
+        projects[tsConfigFilePath].files.push(sourceFile);
         continue;
       }
     }
